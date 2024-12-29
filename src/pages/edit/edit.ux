@@ -1,0 +1,253 @@
+<template>
+  <div class="new-page">
+    <div class="header">
+      <text class="header-time">{{extend == "true" ? "新建" : "编辑"}}倒数日</text>
+    </div>
+    <div class="gap"></div>
+    <div class="line">
+      <text>事件名称</text>
+      <div class="input-line" @click="editEventName"><text>{{event_name}}</text></div>
+    </div>
+    <div class="line">
+      <text>目标日</text>
+      <div class="input-line" @click="editDate"><text>{{date}}</text></div>
+    </div>
+    <div class="gap"></div>
+    <div class="line">
+      <text>在首页显示</text>
+      <switch checked={{on_index}} @change="changeDisplayOnIndex"></switch>
+    </div>
+    <div class="bottom-buttons">
+      <input type="button" class="save-button" @click="saveEvent" value="保存"></input>
+      <input if="{{this.extend != 'true'}}" type="button" class="save-button" @click="deleteEvent" value="删除"></input>
+    </div>
+  </div>
+</template>
+
+<script>
+import router from "@system.router"
+import storage from "@system.storage"
+import { showToast } from "@system.prompt"
+
+export default {
+  protected: {
+    event_name: "",
+    date: "",
+    on_index: true,
+    callback_uri: "/pages/index",
+    date_callback: "",
+    input_callback: "",
+    event_id: "0",
+    extend: "true"
+  },
+  
+	routeBack() {
+    router.replace({
+      uri: this.callback_uri
+    })
+  },
+
+  onReady() {
+    const isInputCallback = !(this.input_callback == "")
+    const isDateCallback = !(this.date_callback == "")
+    if (!isInputCallback && !isDateCallback) {
+      // 没有 callback
+      if (this.date == "") {
+        const _date = new Date()
+        this.date = _date.getFullYear() + "-" + (_date.getMonth() + 1) + "-" + _date.getDate()
+      }
+      return
+    } else if (isInputCallback) {
+      console.log("Input callback")
+      const callback = JSON.parse(this.input_callback)
+      const _cache = JSON.parse(callback.input_cache_data)
+      this.event_id = _cache.event_id
+      this.callback_uri = _cache.callback_uri
+      this.extend = _cache.extend
+
+      this.event_name = callback.input_text
+      this.date = _cache.date
+      this.on_index = _cache.on_index
+    } else if (isDateCallback) {
+      console.log("Date callback")
+      const callback = JSON.parse(this.date_callback)
+      const _cache = JSON.parse(callback.input_cache_data)
+      this.event_id = _cache.event_id
+      this.callback_uri = _cache.callback_uri
+      this.extend = _cache.extend
+      
+      this.event_name = _cache.event_name
+      this.date = callback.date
+      this.on_index = _cache.on_index
+    }
+    global.runGC()
+  },
+
+  editEventName() {
+    router.push({
+      uri: "/pages/input",
+      params: {
+        "input_cache_data": JSON.stringify({
+          "event_id": this.event_id,
+          "extend": this.extend,
+          "callback_uri": this.callback_uri,
+          "date": this.date,
+          "on_index": this.on_index
+        }),
+        "input_text": this.event_name,
+        "callback_uri": "/pages/edit"
+      }
+    })
+  },
+
+  editDate() {
+    router.push({
+      uri: "/pages/inputdate",
+      params: {
+        "input_cache_data": JSON.stringify({
+          "event_id": this.event_id,
+          "extend": this.extend,
+          "callback_uri": this.callback_uri,
+          "event_name": this.event_name,
+          "on_index": this.on_index
+        }),
+        "date": this.date,
+        "callback_uri": "/pages/edit"
+      }
+    })
+  },
+  
+  changeDisplayOnIndex(evt) {
+    this.on_index = evt.checked
+  },
+
+  saveEvent() {
+    if (this.event_name == "") {
+      showToast({message: "事件名称不能为空"})
+      return
+    }
+
+    storage.get({
+      key: "events",
+      default: "[]",
+      success: data => {
+        let events = JSON.parse(data)
+        const _event = {
+          name: this.event_name,
+          date: this.date,
+          on_index: this.on_index
+        }
+        if (this.extend == "true") {
+          events.push(_event)
+        } else {
+          events[Number(this.event_id)] = _event
+        }
+        storage.set({
+          key: "events",
+          value: JSON.stringify(events),
+          success: data => {
+            router.replace({
+              uri: this.callback_uri,
+            })
+            showToast({message: "事件保存成功！"})
+            global.runGC()
+          },
+          fail: (data, code) =>{
+            showToast({message: "数据保存失败，可能是设备可用空间不足，错误码: " + code})
+          }
+        })
+      }
+    })
+  },
+  
+  deleteEvent() {
+    storage.get({
+      key: "events",
+      default: "[]",
+      success: data => {
+        let events = JSON.parse(data)
+        events.splice(Number(this.event_id), 1)
+        storage.set({
+          key: "events",
+          value: JSON.stringify(events),
+          success: data => {
+            router.replace({
+              uri: this.callback_uri,
+            })
+            showToast({message: "事件删除成功！"})
+            global.runGC()
+          },
+          fail: (data, code) =>{
+            showToast({message: "数据保存失败，可能是设备可用空间不足，错误码: " + code})
+          }
+        })
+      }
+    })
+  }
+};
+</script>
+
+<style>
+@import "../../styles/header-new.css";
+
+.new-page {
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  background-color: black;
+}
+
+.gap {
+  height: 12px
+}
+
+.line {
+  display: flex;
+  flex-direction: column;
+  justify-content: left;
+}
+
+.line text {
+  font-size: 15px;
+}
+
+switch {
+  margin-top: 2px;
+  margin-left: 7px;
+  width: 65px;
+  height: 24px;
+  track-color: gray;
+}
+
+.save-button {
+  width: 78px;
+  height: 30px;
+  background-color: black;
+  border: 3px;
+  border-color: gray;
+  color: white;
+  font-size: 15px;
+  margin-top: 10px;
+  margin-left: 2px;
+  margin-right: 2px;
+}
+
+.input-line {
+  height: 30px;
+  width: 180px;
+  border: 1px;
+  border-color: white;
+  border-radius: 10px;
+}
+
+.input-line text {
+  margin: 2px;
+  margin-left: 4px;
+}
+
+.bottom-buttons {
+  display: flex;
+  flex-direction: row;
+}
+</style>
